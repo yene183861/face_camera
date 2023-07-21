@@ -53,7 +53,9 @@ class _MyAppState extends State<MyApp> {
               );
             }
             return SmartFaceCamera(
-                autoCapture: true,
+                autoCapture: false,
+                autoRecord: true,
+                enableAudio: false,
                 defaultCameraLens: CameraLens.front,
                 onCapture: (File? image) {
                   setState(() => _capturedImage = image);

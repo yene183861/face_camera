@@ -18,6 +18,8 @@ dependencies:
   flutter:
     sdk: flutter
 
+  camera: ^0.10.5+2
+
   face_camera:
     # When depending on this package from a real application you should use:
     #   face_camera: ^x.y.z

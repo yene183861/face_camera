@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:developer';
 import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../face_camera.dart';
 import 'handlers/enum_handler.dart';
@@ -19,6 +21,7 @@ class SmartFaceCamera extends StatefulWidget {
   final bool enableAudio;
   final bool autoCapture;
   final bool showControls;
+  final bool autoRecord;
   final bool showCaptureControl;
   final bool showFlashControl;
   final bool showCameraLensControl;
@@ -38,6 +41,7 @@ class SmartFaceCamera extends StatefulWidget {
       this.enableAudio = true,
       this.autoCapture = false,
       this.showControls = true,
+      this.autoRecord = true,
       this.showCaptureControl = true,
       this.showFlashControl = true,
       this.showCameraLensControl = true,
@@ -66,6 +70,8 @@ class _SmartFaceCameraState extends State<SmartFaceCamera>
   bool _alreadyCheckingImage = false;
 
   DetectedFace? _detectedFace;
+  bool _isRecordingInProgress = false;
+  late int durationVideo = 0;
 
   int _currentFlashMode = 0;
   final List<CameraFlashMode> _availableFlashMode = [
@@ -299,6 +305,43 @@ class _SmartFaceCameraState extends State<SmartFaceCamera>
     );
   }
 
+  Widget _recordControlWidget() {
+    final CameraController? cameraController = _controller;
+
+    return IconButton(
+      iconSize: 70,
+      icon: widget.captureControlIcon ??
+          const CircleAvatar(
+              radius: 70,
+              child: Padding(
+                padding: EdgeInsets.all(8.0),
+                child: Icon(Icons.record_voice_over, size: 35),
+              )),
+      onPressed:
+          cameraController != null && cameraController.value.isInitialized
+              ? () async {
+                  if (_isRecordingInProgress) {
+                    XFile? rawVideo = await stopVideoRecording();
+                    File videoFile = File(rawVideo!.path);
+
+                    int currentUnix = DateTime.now().millisecondsSinceEpoch;
+
+                    final directory = await getApplicationDocumentsDirectory();
+                    String fileFormat = videoFile.path.split('.').last;
+
+                    final file = await videoFile.copy(
+                      '${directory.path}/$currentUnix.$fileFormat',
+                    );
+
+                    // _startVideoPlayer();
+                  } else {
+                    startVideoRecording();
+                  }
+                }
+              : null,
+    );
+  }
+
   /// Display the control buttons to switch between flash modes.
   Widget _flashControlWidget() {
     final CameraController? cameraController = _controller;
@@ -401,6 +444,74 @@ class _SmartFaceCameraState extends State<SmartFaceCamera>
     }
   }
 
+  void startVideoRecording() async {
+    final CameraController? cameraController = _controller;
+    if (_controller!.value.isRecordingVideo) {
+      // A recording has already started, do nothing.
+      return;
+    }
+    try {
+      log('RCORD START');
+      final r = await cameraController!.startVideoRecording();
+
+      setState(() {
+        _isRecordingInProgress = true;
+
+        print(_isRecordingInProgress);
+      });
+      Future.delayed(Duration(seconds: 20)).then((_) async {
+        // camera stop process
+        final a = await stopVideoRecording();
+        log('RCORD DONEEEEEEEE');
+        log('${a?.path}');
+      });
+    } on CameraException catch (e) {
+      print('Error starting to record video: $e');
+    }
+  }
+
+  Future<XFile?> stopVideoRecording() async {
+    if (!_controller!.value.isRecordingVideo) {
+      // Recording is already is stopped state
+      return null;
+    }
+    try {
+      XFile file = await _controller!.stopVideoRecording();
+      setState(() {
+        _isRecordingInProgress = false;
+        print(_isRecordingInProgress);
+      });
+      return file;
+    } on CameraException catch (e) {
+      print('Error stopping video recording: $e');
+      return null;
+    }
+  }
+
+  Future<void> pauseVideoRecording() async {
+    if (!_controller!.value.isRecordingVideo) {
+      // Video recording is not in progress
+      return;
+    }
+    try {
+      await _controller!.pauseVideoRecording();
+    } on CameraException catch (e) {
+      print('Error pausing video recording: $e');
+    }
+  }
+
+  Future<void> resumeVideoRecording() async {
+    if (!_controller!.value.isRecordingVideo) {
+      // No video recording was in progress
+      return;
+    }
+    try {
+      await _controller!.resumeVideoRecording();
+    } on CameraException catch (e) {
+      print('Error resuming video recording: $e');
+    }
+  }
+
   Future<XFile?> takePicture() async {
     final CameraController? cameraController = _controller;
     if (cameraController == null || !cameraController.value.isInitialized) {
@@ -452,6 +563,9 @@ class _SmartFaceCameraState extends State<SmartFaceCamera>
                 }
                 if (widget.autoCapture) {
                   _onTakePictureButtonPressed();
+                }
+                if (widget.autoRecord) {
+                  startVideoRecording();
                 }
               }
             } catch (e) {
